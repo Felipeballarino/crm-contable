@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { createClientSchema, clientQuerySchema } from "@/lib/validations/client";
+import { generateFiscalExpirations } from "@/lib/fiscal-calendar";
 
 // ─── POST /api/clients ────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
@@ -69,6 +70,11 @@ export async function POST(req: NextRequest) {
     },
     include: { responsable: { select: { id: true, name: true } } },
   });
+
+  // Auto-assign tax rules and generate fiscal expirations for current year
+  if (client.condicionIva) {
+    await generateFiscalExpirations(client.id, studioId, client.cuit);
+  }
 
   return NextResponse.json(client, { status: 201 });
 }

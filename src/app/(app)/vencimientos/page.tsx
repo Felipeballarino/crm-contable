@@ -8,9 +8,10 @@ import { RecurringManager } from "./recurring-manager";
 import { CalendarView } from "./calendar-view";
 import { ExportButton } from "@/components/ui/export-button";
 import { runAutomation } from "@/lib/automation";
+import { FiscalCalendarView } from "./fiscal-calendar-view";
 
 type StatusFilter = "PENDING" | "DONE" | "OVERDUE" | undefined;
-type View = "list" | "calendar" | "recurring";
+type View = "list" | "calendar" | "recurring" | "fiscal";
 
 const STATUS_TABS = [
   { label: "Pendientes", value: "PENDING" },
@@ -23,6 +24,7 @@ const VIEW_TABS = [
   { label: "Lista", value: "list" },
   { label: "Calendario", value: "calendar" },
   { label: "Plantillas", value: "recurring" },
+  { label: "Calendario Fiscal", value: "fiscal" },
 ] as const;
 
 export default async function VencimientosPage({
@@ -115,6 +117,10 @@ export default async function VencimientosPage({
 
       {view === "recurring" && (
         <RecurringManager templates={templates} clients={clients} />
+      )}
+
+      {view === "fiscal" && (
+        <FiscalCalendarView />
       )}
 
       {view === "list" && (

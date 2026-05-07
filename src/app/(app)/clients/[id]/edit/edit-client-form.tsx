@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ChevronLeft, ChevronRight, Check } from "lucide-react";
+import { ChevronLeft, ChevronRight, Check, Search, Loader2 } from "lucide-react";
 
 const formSchema = z.object({
   razonSocial: z.string().min(2, "Mínimo 2 caracteres").max(200),
@@ -61,11 +61,14 @@ export function EditClientForm({
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [cuitLoading, setCuitLoading] = useState(false);
+  const [cuitError, setCuitError] = useState<string | null>(null);
 
   const {
     register,
     handleSubmit,
     trigger,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -93,6 +96,36 @@ export function EditClientForm({
   const next = async () => {
     if (step === 0 && !(await trigger(["razonSocial"]))) return;
     setStep((s) => Math.min(s + 1, 2));
+  };
+
+  const lookupCuit = async () => {
+    const cleanCuit = client.cuit.replace(/\D/g, "");
+    setCuitLoading(true);
+    setCuitError(null);
+
+    try {
+      const res = await fetch(`/api/clients/lookup-cuit?cuit=${cleanCuit}`);
+      const data = await res.json();
+
+      if (!res.ok) {
+        setCuitError(data.error ?? "Error al consultar AFIP");
+        return;
+      }
+
+      if (data.razonSocial) setValue("razonSocial", data.razonSocial);
+      if (data.condicionIva) setValue("condicionIva", data.condicionIva);
+      if (data.actividadPrincipal) setValue("actividadPrincipal", data.actividadPrincipal);
+      if (data.inicioActividad) {
+        const date = new Date(data.inicioActividad).toISOString().slice(0, 10);
+        setValue("inicioActividad", date);
+      }
+      if (data.domicilio) setValue("domicilio", data.domicilio);
+      if (data.tipoSocietario) setValue("tipoSocietario", data.tipoSocietario);
+    } catch {
+      setCuitError("Error de conexión al consultar AFIP");
+    } finally {
+      setCuitLoading(false);
+    }
   };
 
   const onSubmit = async (data: FormValues) => {
@@ -157,8 +190,27 @@ export function EditClientForm({
           </div>
           <div>
             <label className={LABEL}>CUIT</label>
-            <input value={client.cuit} disabled className={INPUT + " bg-slate-50 text-slate-400 cursor-not-allowed"} />
-            <p className="text-xs text-slate-400 mt-1">El CUIT no puede modificarse.</p>
+            <div className="flex gap-2">
+              <input value={client.cuit} disabled className={INPUT + " flex-1 bg-slate-50 text-slate-400 cursor-not-allowed"} />
+              <button
+                type="button"
+                onClick={lookupCuit}
+                disabled={cuitLoading}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50 shrink-0"
+                title="Actualizar datos desde AFIP"
+              >
+                {cuitLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Search className="h-4 w-4" />
+                )}
+                <span className="hidden sm:inline">{cuitLoading ? "Buscando..." : "Actualizar"}</span>
+              </button>
+            </div>
+            <p className="text-xs text-slate-400 mt-1">El CUIT no puede modificarse. Usá "Actualizar" para traer datos frescos de AFIP.</p>
+            {cuitError && (
+              <p className="text-xs text-amber-600 mt-1">{cuitError}</p>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>

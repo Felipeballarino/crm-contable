@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ChevronLeft, ChevronRight, Check } from "lucide-react";
+import { ChevronLeft, ChevronRight, Check, Search, Loader2, X } from "lucide-react";
 
 // No .default() or .transform() — avoids the input/output type split that
 // breaks Resolver<T>. Defaults are supplied via useForm's defaultValues.
@@ -40,16 +40,58 @@ export function NewClientForm({ users }: { users: { id: string; name: string }[]
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [cuitLoading, setCuitLoading] = useState(false);
+  const [cuitError, setCuitError] = useState<string | null>(null);
 
   const {
     register,
     handleSubmit,
     trigger,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: { inscriptoIIBB: false, status: "ACTIVE" },
   });
+
+  const lookupCuit = async () => {
+    const cuitValue = document.querySelector<HTMLInputElement>('input[name="cuit"]')?.value;
+    if (!cuitValue) return;
+
+    const cleanCuit = cuitValue.replace(/\D/g, "");
+    if (cleanCuit.length !== 11) {
+      setCuitError("Ingresá un CUIT válido de 11 dígitos");
+      return;
+    }
+
+    setCuitLoading(true);
+    setCuitError(null);
+
+    try {
+      const res = await fetch(`/api/clients/lookup-cuit?cuit=${cleanCuit}`);
+      const data = await res.json();
+
+      if (!res.ok) {
+        setCuitError(data.error ?? "Error al consultar AFIP");
+        return;
+      }
+
+      // Auto-fill form fields
+      if (data.razonSocial) setValue("razonSocial", data.razonSocial);
+      if (data.condicionIva) setValue("condicionIva", data.condicionIva);
+      if (data.actividadPrincipal) setValue("actividadPrincipal", data.actividadPrincipal);
+      if (data.inicioActividad) {
+        const date = new Date(data.inicioActividad).toISOString().slice(0, 10);
+        setValue("inicioActividad", date);
+      }
+      if (data.domicilio) setValue("domicilio", data.domicilio);
+      if (data.tipoSocietario) setValue("tipoSocietario", data.tipoSocietario);
+    } catch {
+      setCuitError("Error de conexión al consultar AFIP");
+    } finally {
+      setCuitLoading(false);
+    }
+  };
 
   const next = async () => {
     if (step === 0 && !(await trigger(["razonSocial", "cuit"]))) return;
@@ -126,8 +168,30 @@ export function NewClientForm({ users }: { users: { id: string; name: string }[]
           </div>
           <div>
             <label className={LABEL}>CUIT *</label>
-            <input {...register("cuit")} className={INPUT} placeholder="20-12345678-9" />
+            <div className="flex gap-2">
+              <input {...register("cuit")} className={INPUT + " flex-1"} placeholder="20-12345678-9" />
+              <button
+                type="button"
+                onClick={lookupCuit}
+                disabled={cuitLoading}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50 shrink-0"
+                title="Buscar datos en AFIP"
+              >
+                {cuitLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Search className="h-4 w-4" />
+                )}
+                <span className="hidden sm:inline">{cuitLoading ? "Buscando..." : "Buscar"}</span>
+              </button>
+            </div>
             {errors.cuit && <p className={ERROR}>{errors.cuit.message}</p>}
+            {cuitError && (
+              <div className="flex items-center gap-1 mt-1">
+                <X className="h-3 w-3 text-amber-500" />
+                <p className="text-xs text-amber-600">{cuitError}</p>
+              </div>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>

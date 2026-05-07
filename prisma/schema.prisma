@@ -75,6 +75,7 @@ model Studio {
   recurringExpirations  RecurringExpiration[]
   payments              Payment[]
   documents             Document[]
+  clientTaxAssignments  ClientTaxAssignment[]
 }
 
 model User {
@@ -127,6 +128,7 @@ model Client {
   recurringExpirations RecurringExpiration[]
   payments             Payment[]
   documents            Document[]
+  taxAssignments       ClientTaxAssignment[]
 
   @@unique([studioId, cuit])
   @@index([studioId])
@@ -251,4 +253,40 @@ model RecurringExpiration {
 
   @@index([studioId])
   @@index([clientId])
+}
+
+// ─── Fiscal Calendar ─────────────────────────────────────────────────────────
+
+model TaxRule {
+  id                String   @id @default(cuid())
+  nombre            String   @unique
+  descripcion       String?  @db.Text
+  frecuencia        String   // MONTHLY, QUARTERLY, ANNUAL
+  regla             String   // CUIT_BASED, FIXED_DAY, FIXED_MONTH
+  diasVencimiento   Int[]    // [10, 14, 17, 20, 23, 26, 30, 3, 6, 9] para CUIT_BASED
+  mesesAplicacion   Int[]    // [1,2,3,...] o [3,6,9,12] para trimestrales
+  aplicaA           String[] // ["Responsable Inscripto", "Monotributista", ...]
+  activo            Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  clientAssignments ClientTaxAssignment[]
+}
+
+model ClientTaxAssignment {
+  id        String   @id @default(cuid())
+  clientId  String
+  taxRuleId String
+  studioId  String
+  activo    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  client  Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  taxRule TaxRule  @relation(fields: [taxRuleId], references: [id], onDelete: Cascade)
+  studio  Studio   @relation(fields: [studioId], references: [id], onDelete: Cascade)
+
+  @@unique([studioId, clientId, taxRuleId])
+  @@index([studioId])
+  @@index([clientId])
+  @@index([taxRuleId])
 }
